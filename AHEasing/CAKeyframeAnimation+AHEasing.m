@@ -34,7 +34,7 @@
 	for(size_t frame = 0; frame < keyframeCount; ++frame, t += dt)
 	{
 		CGFloat value = fromValue + function(t) * (toValue - fromValue);
-		[values addObject:[NSNumber numberWithFloat:(float)value]];
+		[values addObject:@((float)value)];
 	}
 	
 	CAKeyframeAnimation *animation = [CAKeyframeAnimation animationWithKeyPath:path];
