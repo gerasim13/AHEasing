@@ -1,7 +1,6 @@
 //
 //  NSObject+AHEasing.m
 //
-//  Copyright (c) 2011, Auerhaus Development, LLC
 //  Copyright (c) 2014, Casual Underground Lab.
 //
 //  This program is free software. It comes without any warranty, to
@@ -18,12 +17,46 @@
 
 //_______________________________________________________________________________________________________________
 
+typedef Float32 (^AHAnimationAnimationBlock )(id, Float32);
+typedef void    (^AHAnimationCompletionBlock)(id, BOOL   );
+
+//_______________________________________________________________________________________________________________
+
 @interface NSObject (AHEasing)
 
 - (void)addAnimationWithKey:(NSString*)key
-                   function:(AHEasingFunction)function
+                     easing:(AHEasingFunction)easing
                    duration:(Float32)duration
                       delay:(Float32)delay
+                  fromValue:(Float32)fromValue
+                    toValue:(Float32)toValue
+                 usingBlock:(AHAnimationAnimationBlock)block
+                 completion:(AHAnimationCompletionBlock)completion;
+
+- (void)addAnimationWithKey:(NSString*)key
+                     easing:(AHEasingFunction)easing
+                   duration:(Float32)duration
+                      delay:(Float32)delay
+                  fromValue:(Float32)fromValue
+                    toValue:(Float32)toValue
+                 usingBlock:(AHAnimationAnimationBlock)block;
+
+- (void)addAnimationWithKey:(NSString*)key
+                     easing:(AHEasingFunction)easing
+                   duration:(Float32)duration
+                      delay:(Float32)delay
+                  fromValue:(Float32)fromValue
+                    toValue:(Float32)toValue
+                 completion:(AHAnimationCompletionBlock)completion;
+
+- (void)addAnimationWithKey:(NSString*)key
+                   duration:(Float32)duration
+                      delay:(Float32)delay
+                  fromValue:(Float32)fromValue
+                    toValue:(Float32)toValue;
+
+- (void)addAnimationWithKey:(NSString*)key
+                   duration:(Float32)duration
                   fromValue:(Float32)fromValue
                     toValue:(Float32)toValue;
 

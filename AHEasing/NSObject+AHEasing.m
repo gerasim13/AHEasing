@@ -1,7 +1,6 @@
 //
 //  NSObject+AHEasing.m
 //
-//  Copyright (c) 2014, Auerhaus Development, LLC
 //  Copyright (c) 2014, Casual Underground Lab.
 //
 //  This program is free software. It comes without any warranty, to
@@ -28,10 +27,6 @@
 
 //_______________________________________________________________________________________________________________
 
-typedef void(^AHAnimationCompletionBlock)(AHAnimation *animation);
-
-//_______________________________________________________________________________________________________________
-
 @interface AHAnimation : NSObject
 {
     @package
@@ -47,6 +42,7 @@ typedef void(^AHAnimationCompletionBlock)(AHAnimation *animation);
 }
 
 @property (nonatomic, copy  ) AHAnimationCompletionBlock completion;
+@property (nonatomic, copy  ) AHAnimationAnimationBlock  block;
 @property (nonatomic, assign) BOOL animating;
 
 + (instancetype)animationForKey:(NSString*)key
@@ -60,6 +56,7 @@ typedef void(^AHAnimationCompletionBlock)(AHAnimation *animation);
 
 - (void)start;
 - (void)end;
+- (void)update:(NSTimeInterval)t;
 
 @end
 
@@ -98,51 +95,110 @@ static CADisplayLink       *_displayLink = nil;
             else
             {
                 t = (t - anim->_delay) / anim->_duration;
-                // End animation
-                if (t >= 1.0)
-                {
-                    [anim end];
-                }
-                // Update animation
-                else
-                {
-                    anim->_currentValue = (anim->_endValue - anim->_startValue) * anim->_easing(t);
-                    anim->_currentValue = anim->_currentValue > 0 ? anim->_currentValue : anim->_currentValue + 1.0;
-                    [anim->_target setValue:@(anim->_currentValue) forKey:anim->_key];
-                }
+                if  (t >= 1.0) [anim end];      // End animation
+                else           [anim update:t]; // Update animation
             }
         }
     }
 }
 
 - (void)addAnimationWithKey:(NSString*)key
-                   function:(AHEasingFunction)function
+                     easing:(AHEasingFunction)easing
+                   duration:(Float32)duration
+                      delay:(Float32)delay
+                  fromValue:(Float32)fromValue
+                    toValue:(Float32)toValue
+                 usingBlock:(AHAnimationAnimationBlock)block
+                 completion:(AHAnimationCompletionBlock)completion
+{
+    // Init timer
+    if (!_displayLink)
+    {
+        _displayLink = [CADisplayLink displayLinkWithTarget:[NSObject class] selector:@selector(update:)];
+        [_displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
+    }
+    // Init animation
+    AHAnimation *anim = [AHAnimation animationForKey:key
+                                              target:self
+                                      easingFunction:easing
+                                            duration:duration
+                                               delay:delay
+                                          startValue:fromValue
+                                            endValue:toValue
+                                     completionBlock:completion];
+    // Copy block
+    if (block)
+    {
+        anim.block = block;
+    }
+    // Add animation to dictionary
+    NSUInteger hash = [key hash] ^ [self hash];
+    _animations[@(hash)] = anim;
+}
+
+- (void)addAnimationWithKey:(NSString*)key
+                     easing:(AHEasingFunction)easing
+                   duration:(Float32)duration
+                      delay:(Float32)delay
+                  fromValue:(Float32)fromValue
+                    toValue:(Float32)toValue
+                 usingBlock:(AHAnimationAnimationBlock)block
+{
+    [self addAnimationWithKey:key
+                       easing:easing
+                     duration:duration
+                        delay:delay
+                    fromValue:fromValue
+                      toValue:toValue
+                   usingBlock:nil
+                   completion:nil];
+}
+
+- (void)addAnimationWithKey:(NSString*)key
+                     easing:(AHEasingFunction)easing
+                   duration:(Float32)duration
+                      delay:(Float32)delay
+                  fromValue:(Float32)fromValue
+                    toValue:(Float32)toValue
+                 completion:(AHAnimationCompletionBlock)completion
+{
+    [self addAnimationWithKey:key
+                       easing:easing
+                     duration:duration
+                        delay:delay
+                    fromValue:fromValue
+                      toValue:toValue
+                   usingBlock:nil
+                   completion:completion];
+}
+
+- (void)addAnimationWithKey:(NSString*)key
                    duration:(Float32)duration
                       delay:(Float32)delay
                   fromValue:(Float32)fromValue
                     toValue:(Float32)toValue
 {
-    // Init timer
-    if (!_displayLink)
-    {
-        _displayLink = [CADisplayLink displayLinkWithTarget:[self class] selector:@selector(update:)];
-        [_displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
-    }
-    // Init animation
-    __weak NSObject *weakSelf = self;
-    AHAnimation *anim = [AHAnimation animationForKey:key
-                                              target:self
-                                      easingFunction:function
-                                            duration:duration
-                                               delay:delay
-                                          startValue:fromValue
-                                            endValue:toValue
-                                     completionBlock:^(AHAnimation *animation){
-                                         [weakSelf removeAnimationWithKey:animation->_key];
-                                     }];
-    // Add animation to dictionary
-    NSUInteger hash = [key hash] ^ [self hash];
-    _animations[@(hash)] = anim;
+    [self addAnimationWithKey:key
+                       easing:LinearInterpolation
+                     duration:duration
+                        delay:delay
+                    fromValue:fromValue
+                      toValue:toValue
+                   usingBlock:nil];
+}
+
+- (void)addAnimationWithKey:(NSString*)key
+                   duration:(Float32)duration
+                  fromValue:(Float32)fromValue
+                    toValue:(Float32)toValue
+{
+    [self addAnimationWithKey:key
+                       easing:LinearInterpolation
+                     duration:duration
+                        delay:0.0
+                    fromValue:fromValue
+                      toValue:toValue
+                   usingBlock:nil];
 }
 
 - (void)removeAnimationWithKey:(NSString*)key
@@ -170,6 +226,7 @@ static CADisplayLink       *_displayLink = nil;
 
 @implementation AHAnimation
 @synthesize completion = _completion;
+@synthesize block      = _block;
 @synthesize animating  = _animating;
 
 //_______________________________________________________________________________________________________________
@@ -221,18 +278,54 @@ static CADisplayLink       *_displayLink = nil;
 {
     _animating = YES;
     _startTime = CACurrentMediaTime();
-    [_target setValue:@(_startValue) forKey:_key];
+    if (_block)
+    {
+        _currentValue = _block(_target, _startValue);
+    }
+    else
+    {
+        [_target setValue:@(_startValue) forKey:_key];
+        _currentValue = [[_target valueForKey:_key] floatValue];
+    }
 }
 
 - (void)end
 {
-    _animating = NO;
-    [_target setValue:@(_endValue) forKey:_key];
-    // Call completion block
-    if (_completion)
+    // Update to end value
+    if (_block)
     {
-        _completion(self);
-        _completion = nil;
+        _currentValue = _block(_target, _endValue);
+    }
+    else
+    {
+        [_target setValue:@(_endValue) forKey:_key];
+        _currentValue = [[_target valueForKey:_key] floatValue];
+    }
+    // Call completion block
+    if (_completion) _completion(self, _currentValue >= _endValue);
+    // Remove animation
+    [_target removeAnimationWithKey:_key];
+    // Reset variables
+    _block      = nil;
+    _completion = nil;
+    _target     = nil;
+    _key        = nil;
+    _animating  = NO;
+}
+
+- (void)update:(NSTimeInterval)t
+{
+    Float32 val = (_endValue - _startValue) * _easing(t);
+    val = val > 0 ? val : val + 1.0;
+    // Update value
+    if (_block)
+    {
+        _currentValue = _block(_target, val);
+    }
+    else
+    {
+        [_target setValue:@(val) forKey:_key];
+        _currentValue = [[_target valueForKey:_key] floatValue];
     }
 }
 
