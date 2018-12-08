@@ -82,7 +82,7 @@ static CADisplayLink       *_displayLink = nil;
 + (void)update:(CADisplayLink*)link
 {
     // Update animations
-    for (AHAnimation *anim in [_animations allValues])
+    for (AHAnimation *anim in [[_animations copy] allValues])
     {
         NSTimeInterval t = link.timestamp - anim->_startTime;
         if (t >= anim->_delay)
@@ -111,6 +111,7 @@ static CADisplayLink       *_displayLink = nil;
                  usingBlock:(AHAnimationAnimationBlock)block
                  completion:(AHAnimationCompletionBlock)completion
 {
+    NSParameterAssert([NSThread isMainThread]);
     // Init timer
     if (!_displayLink)
     {
